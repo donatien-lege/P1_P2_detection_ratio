@@ -5,7 +5,7 @@ Training pipelines used to select NN architectures both for pulse selection and 
 
 To run a pipeline, cd to the corresponding folder(P1_P2_detection or calculable_ratio) then:
 
-$ conda env create -f workflow/envs/venv.yaml
-$ conda activate venv
-$ cd workflow
-$ snakemake -s Snakefile --cores 8
+$ conda env create -f workflow/envs/venv.yaml  
+$ conda activate venv  
+$ cd workflow  
+$ snakemake -s Snakefile --cores 8  
