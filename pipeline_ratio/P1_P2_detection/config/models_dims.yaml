@@ -1,0 +1,33 @@
+# Encoder blocks
+padding: 3
+stride: 1
+
+# Convolutive blocks 
+CNN:
+channels:
+  - 1
+  - 128
+  - 64
+  - 32
+
+kernels:
+  - 9
+  - 7
+  - 5
+
+# MLP
+hidden_layers: 3
+width: 80
+
+# LSTM
+hidden_layer_size: 180
+num_cells: 1
+
+# Batch-Norm and Dropout parameters
+eps: 0.00001
+mom: 0.1
+drop: 0.2
+
+
+
+

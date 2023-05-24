@@ -1,0 +1,17 @@
+#inputs standardized length
+size: 180
+
+models:
+  - LSTMFCN
+  - CNN
+  - LSTM
+
+# training hyperparameters
+batch: 256
+l_rate: 0.001
+split: 0.9
+epochs: 150
+
+#decision threshold 
+threshold: 0.5
+

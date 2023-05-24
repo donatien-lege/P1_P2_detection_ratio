@@ -1,0 +1,19 @@
+#inputs standardized length
+size: 180
+
+models:
+  - UNet
+  - LSTM
+
+# training hyperparameters
+batch: 256
+l_rate: 0.001
+split: 0.9
+epochs: 150
+
+correct:
+  - nothing
+  - both
+  - curve
+
+

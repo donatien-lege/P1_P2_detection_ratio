@@ -1,0 +1,131 @@
+import glob
+import os
+from os.path import basename, splitext, commonpath
+configfile: "../config/params.yaml"
+
+train_pulses = "../resources/train/pulses"
+test_pulses = "../resources/test/pulses"
+
+#get train files ids
+train_files = map(basename, os.listdir(train_pulses))
+train_id = tuple(map(lambda x: splitext(x)[0], train_files))
+
+#get test files ids
+test_files = map(basename, os.listdir(test_pulses))
+test_id = tuple(map(lambda x: splitext(x)[0], test_files))
+
+rule all:
+    # Collect all the outputs
+    input: 
+        loss = "../results/graphs/loss.png",
+        clasf = "../results/graphs/clasf.png",
+        metrics = "../results/graphs/metrics.csv"
+
+rule graph_loss:
+    # Plot the loss on the validation set during NN training
+    threads: 1
+    input:
+        files = expand("../results/val_loss/{nn}.csv", nn=config['models'])
+    output:
+        loss = "../results/graphs/loss.png"
+    log: "logs/graph_loss/graph_loss.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/graph_loss.py"
+
+rule merge:
+    # Merge all the csv files and plot the associated metrics
+    threads: 1
+    input:
+        error = expand("../results/errors/{f}_{nn}_{c}.csv", 
+                        f=test_id,
+                        nn=config['models'],
+                        c=config['correct'])
+    output:
+        clasf = "../results/graphs/clasf.png",
+        metrics = "../results/graphs/metrics.csv"
+    log: "logs/merge/merge.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/merge.py"
+
+rule perfs:
+    # Compute MAE and accuracy on the test set
+    input:
+        pred = "../results/preds/{f}_{nn}_{c}.npy",
+        pulse = "../resources/test/pulses/{f}.npy",
+        annot = "../resources/test/annots/{f}.npy"
+    output:
+        "../results/errors/{f}_{nn}_{c}.csv"
+    log: "logs/perfs/{f}_{nn}_{c}.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/eval.py"
+
+rule preds:
+    # Combine score and curvature to predict the peaks positions
+    # on testing set
+    input: 
+        pdf = "../results/pdf/{f}_{nn}.npy",
+        curvature = "../results/curvature/{f}.npy"
+    output:
+        pred = "../results/preds/{f}_{nn}_{c}.npy"
+    log: "logs/preds/{f}_{nn}_{c}.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/preds.py"
+
+rule pdfs:
+    # Evaluate the neural networks scores
+    threads: len(config["models"])
+    input:
+        model = "../results/models/{nn}.pth",
+        pulse = "../resources/test/pulses/{f}.npy"
+    output:
+        pdf = "../results/pdf/{f}_{nn}.npy"
+    log: "logs/pdfs/{f}_{nn}.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/candidates.py"
+
+rule curvatures:
+    # Compute the curvatures of the testing set pulses
+    input:
+        files = "../resources/test/pulses/{f}.npy"
+    output:
+        curvature = "../results/curvature/{f}.npy"
+    log: "logs/curvatures/{f}.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/curvature.py"
+
+rule train:
+    # Train the neural networks listed in config file
+    threads: len(config["models"])
+    input:
+        pulses = expand("../resources/transf/pulses/{raw}.npy", raw=train_id),
+        annots = expand("../resources/transf/annots/{raw}.npy", raw=train_id)
+    output:
+        model = "../results/models/{nn}.pth",
+        loss = "../results/val_loss/{nn}.csv"
+    log: "logs/train/{nn}.log"
+    conda: "envs/venv.yaml"
+    params:
+        folder_pulse = lambda w, input: commonpath(input['pulses']),
+        folder_annot = lambda w, input: commonpath(input['annots'])
+    script:
+        "scripts/train_NN.py"
+
+rule phi:
+    # Apply phi to training set
+    input:
+        pulses = "../resources/train/pulses/{raw}.npy",
+        annots = "../resources/train/annots/{raw}.npy"
+    output:
+        pulses = "../resources/transf/pulses/{raw}.npy",
+        annots = "../resources/transf/annots/{raw}.npy"
+    log: "logs/phi/{raw}.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/gen_labels.py"
+

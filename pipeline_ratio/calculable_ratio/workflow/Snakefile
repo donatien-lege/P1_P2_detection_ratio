@@ -1,0 +1,125 @@
+import glob
+import os
+from os.path import basename, splitext, commonpath
+configfile: "../config/params.yaml"
+
+train_pulses = "../resources/train/pulses"
+test_pulses = "../resources/test/pulses"
+
+#get train files ids
+train_files = map(basename, os.listdir(train_pulses))
+train_id = tuple(map(lambda x: splitext(x)[0], train_files))
+
+#get test files ids
+test_files = map(basename, os.listdir(test_pulses))
+test_id = tuple(map(lambda x: splitext(x)[0], test_files))
+
+
+rule all:
+    # Collect all the outputs
+    input: 
+        loss = "../results/graphs/loss.png",
+        metrics = "../results/graphs/metrics.csv",
+        conf  = "../results/graphs/conf_matrix.csv",
+        roc = "../results/graphs/roc.png"
+
+rule graph_loss:
+    # Plot the loss on the validation set during NN training
+    threads: 1
+    input:
+        files = expand("../results/val_loss/{nn}.csv", nn=config['models'])
+    output:
+        loss = "../results/graphs/loss.png"
+    log: "logs/graph_loss/graph_loss.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/graph_loss.py"
+
+rule roc:
+    # Merge all the csv files and plot the associated metrics
+    threads: 1
+    input:
+        preds = expand("../results/pdf/{f}_{nn}.npy", 
+                        f=test_id,
+                        nn=config['models']),
+        annot = expand("../resources/test/annots/{f}.npy", f=test_id)
+
+    output:
+        roc = "../results/graphs/roc.png",
+        matrix = "../results/graphs/conf_matrix.csv"
+
+    log: "logs/roc/roc.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/roc.py"
+
+rule merge:
+    # Merge all the csv files and plot the associated metrics
+    threads: 1
+    input:
+        error = expand("../results/errors/{f}_{nn}.csv", 
+                        f=test_id,
+                        nn=config['models'])
+    output:
+        metrics = "../results/graphs/metrics.csv"
+
+    log: "logs/merge/merge.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/merge.py"
+
+rule perfs:
+    # Compute MAE and accuracy on the test set
+    input:
+        pred = "../results/pdf/{f}_{nn}.npy",
+        annot = "../resources/test/annots/{f}.npy",
+        pulse = "../resources/test/pulses/{f}.npy",
+    output:
+        errors = "../results/errors/{f}_{nn}.csv",
+        matrices = "../results/matrices/{f}_{nn}.npy"
+    log: "logs/perfs/{f}_{nn}.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/eval.py"
+
+rule classf:
+    # NNs classification
+    threads: len(config["models"])
+    input:
+        model = "../results/models/{nn}.pth",
+        pulse = "../resources/test/pulses/{f}.npy"
+    output:
+        pred = "../results/pdf/{f}_{nn}.npy"
+    log: "logs/pdfs/{f}_{nn}.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/nn_output.py"
+
+rule train:
+    # Train the neural networks listed in config file
+    threads: len(config["models"])
+    input:
+        pulses = expand("../resources/train/pulses/{raw}.npy", raw=train_id),
+        annots = expand("../resources/transf/annots/{raw}.npy", raw=train_id)
+    output:
+        model = "../results/models/{nn}.pth",
+        loss = "../results/val_loss/{nn}.csv"
+    log: "logs/train/{nn}.log"
+    conda: "envs/venv.yaml"
+    params:
+        folder_pulse = lambda w, input: commonpath(input['pulses']),
+        folder_annot = lambda w, input: commonpath(input['annots'])
+    script:
+        "scripts/train_NN.py"
+
+rule phi:
+    # Generate True/False labels from P1/P2 position files
+    input:
+        annots = "../resources/train/annots/{raw}.npy"
+    output:
+        annots = "../resources/transf/annots/{raw}.npy"
+    log: "logs/phi/{raw}.log"
+    conda: "envs/venv.yaml"
+    script:
+        "scripts/gen_labels.py"
+
